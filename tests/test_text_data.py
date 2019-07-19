@@ -64,6 +64,7 @@ def test_from_csv_and_from_df():
     assert len(data1.classes) == 2
     x,y = next(iter(data1.valid_dl)) # Will fail if the SortSampler keys get messed up between train and valid.
     df = text_df(['neg','pos','neg pos'])
+    trn_df,val_df,tst_df = df.iloc[:20],df.iloc[20:],df.iloc[:10]
     data2 = TextClasDataBunch.from_df(path, train_df=trn_df, valid_df=val_df,
                                   label_cols=0, text_cols=["text"], label_delim=' ',
                                   tokenizer=Tokenizer(pre_rules=[special_fastai_test_rule]), no_check=True)
@@ -79,6 +80,16 @@ def test_from_csv_and_from_df():
     data4.batch_size = 8
 
     os.remove(path/'tmp.csv')
+
+def test_from_token():
+    this_tests(TextClasDataBunch.from_tokens)
+    toks = [np.array([BOS])]*10
+    lbl = [0]*10
+    data = TextClasDataBunch.from_tokens('/tmp', vocab=Vocab([BOS, PAD]),
+                                         trn_tok=toks, trn_lbls=lbl,
+                                         val_tok=toks, val_lbls=lbl,
+                                         bs=8)
+    x,y = next(iter(data.valid_dl))
 
 def test_should_load_backwards_lm_1():
     "assumes that a backwards batch starts where forward ends. Whether this holds depends on LanguageModelPreLoader"
@@ -186,18 +197,40 @@ def test_from_ids_works_for_variable_length_sentences():
                                       train_ids=ids, train_lbls=lbl,
                                       valid_ids=ids, valid_lbls=lbl, classes={0:0}, bs=8)
 
-def test_from_ids_exports_classes():
+def test_export_classes():
     this_tests(TextClasDataBunch.from_ids)
     ids = [np.array([0])]*10
+    toks = [np.array([BOS])]*10
     lbl = [0]*10
-    data = TextClasDataBunch.from_ids('/tmp', vocab=Vocab({0: BOS, 1:PAD}),
+    classes = ['a', 'b', 'c']
+    data = TextClasDataBunch.from_ids('/tmp', vocab=Vocab([BOS, PAD]),
                                       train_ids=ids, train_lbls=lbl,
                                       valid_ids=ids, valid_lbls=lbl,
-                                      classes=['a', 'b', 'c'], bs=8)
+                                      classes=classes, bs=8)
     data.export('/tmp/export.pkl')
     empty_data = TextClasDataBunch.load_empty('/tmp')
     assert hasattr(empty_data, 'classes')
-    assert empty_data.classes == ['a', 'b', 'c'] 
+    assert empty_data.classes == classes
+
+    df = text_df(classes)
+    trn_df,val_df,tst_df = df.iloc[:20],df.iloc[20:],df.iloc[:10]
+    data = TextClasDataBunch.from_df('/tmp',
+                                      train_df=trn_df, valid_df=val_df,
+                                      text_cols=["text"], bs=8)
+    data.export('/tmp/export.pkl')
+    empty_data = TextClasDataBunch.load_empty('/tmp')
+    assert hasattr(empty_data, 'classes')
+    assert empty_data.classes == classes
+
+    data = TextClasDataBunch.from_tokens('/tmp', vocab=Vocab([BOS, PAD]),
+                                         trn_tok=toks, trn_lbls=lbl,
+                                         val_tok=toks, val_lbls=lbl,
+                                         classes=classes, bs=8)
+    data.export('/tmp/export.pkl')
+    empty_data = TextClasDataBunch.load_empty('/tmp')
+    assert hasattr(empty_data, 'classes')
+    assert empty_data.classes == classes
+
 
 def test_regression():
     this_tests('na')
